@@ -1,0 +1,55 @@
+name: Compilar Femboy Mod
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**.zip'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Descomprimir el proyecto mas reciente
+        run: |
+          LIST=$(git log --diff-filter=AM --name-only --pretty=format: -- '*.zip')
+          ZIP=$(grep -m1 '\.zip$' <<< "$LIST")
+          echo "Usando el zip: $ZIP"
+          rm -rf femboy-project
+          mkdir femboy-project
+          unzip -q "$ZIP" -d femboy-project
+          BUILD_FILE=$(find femboy-project -name build.gradle | head -n 1)
+          echo "PROJECT_DIR=$(dirname "$BUILD_FILE")" >> "$GITHUB_ENV"
+
+      - name: Compilar
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle build --no-daemon --console=plain
+
+      - name: Subir .jar como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: femboy-jar
+          path: ${{ env.PROJECT_DIR }}/build/libs/femboy-*.jar
+
+      - name: Publicar en Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: femboy-v1.0.0
+          name: Femboy Mod 1.0.0
+          files: ${{ env.PROJECT_DIR }}/build/libs/femboy-*.jar
